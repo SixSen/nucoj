@@ -1,5 +1,4 @@
-﻿
-/*************************************************
+﻿/*************************************************
      Copyright (c) 2018 中北大学 North University of China
      All rights reserved.
 
@@ -62,7 +61,15 @@
 #define OJ_CL 10		// Compiling 正在编译
 #define OJ_RN 11		// Running 正在判断
 
-#define OFFSET_OLE 1024
+#define OFFSET_OLE 1024	//允许误差超出的文件长
+
+char* hostname = nullptr;
+char* username = nullptr;
+char* passwd = nullptr;
+char* dbname = nullptr;
+
+const char* MYSQL_ERROR_LOG = "mysqlError.log";
+const char* SYSTEM_ERROR_LOG = "systemError.log";
 
 int main(int argc, char *argv[]) {
 	// argv is command, runId, cid, pno, language, hostname username passwd dbname
@@ -86,6 +93,7 @@ int compile(int lang, const char* ceFile, const char* runId){// return 0 means c
 		,"Main.java",nullptr };
 
 	pid_t pid = fork();// used to create processes
+
 	if (-1 == pid) {
 		// create process fail
 		std::ofstream fout(SYSTEM_ERROR_LOG, std::ios_base::out | std::ios_base::app);
@@ -95,33 +103,31 @@ int compile(int lang, const char* ceFile, const char* runId){// return 0 means c
 		fout.close();
 		return -1;///error
 	}
-	else if (pid != 0) {
-		// parent process .pid=child_pid
+	else if (0 != pid) {// parent process .pid==child_pid
 		int status;
-		waitpid(pid, &status, 0);///wait for child process
+		waitpid(pid, &status, 0);///wait for child process  .waitpid(pid_t pid,int *status,int options)
 
 		return status;
 	}
-	else {// child pid=0
-		  // set rlimit for compile
+	else {// child process .pid == 0
+		// set rlimit for compile
 		struct rlimit lim;
 		lim.rlim_cur = lim.rlim_max = time_limit;
-		setrlimit(RLIMIT_CPU, &lim);
+		setrlimit(RLIMIT_CPU, &lim);// set cpu time limit
 
-		alarm(0);
+		alarm(0);//????????????????????????????????????????????????????????????????????????????????????????
 		alarm(time_limit);
 
-		//	lim.rlim_max =
 		lim.rlim_cur = memory_limit;
-		setrlimit(RLIMIT_AS, &lim);
+		setrlimit(RLIMIT_AS, &lim);// set memory limit
 
 		lim.rlim_cur = lim.rlim_max = FILE_SIZE*MB;
-		setrlimit(RLIMIT_FSIZE, &lim);
+		setrlimit(RLIMIT_FSIZE, &lim);//set the max size of output file
 
 		//  start compile 
 		freopen(ceFile, "w", stderr);
 		switch (lang) {
-		case LAN_C: execvp(COMP_C[0], (char* const*)COMP_C); break;
+		case LAN_C: execvp(COMP_C[0], (char* const*)COMP_C); break;///execvp()第一个参数path无需完整路径，它会在环境变量PATH当中查找命令
 		case LAN_CPP: execvp(COMP_CPP[0], (char* const*)COMP_CPP); break;
 		case LAN_JAVA: execvp(COMP_JAVA[0], (char* const*)COMP_JAVA); break;
 		default: std::cerr << "Nothing to do.\n";
@@ -146,7 +152,7 @@ void updateCompileErrorInfo(const char* runId, const char* ceFile){//write Compi
 }
 
 
-void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// connect to Mysql 提交错误信息 ！！！待修改！！！ 
+void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// connect to Mysql 提交错误信息 ++++++++++++++++++++++++++++++待修改！！！ 
 
 	sql::Driver* driver = nullptr;
 	sql::Connection* conn = nullptr;
@@ -182,14 +188,16 @@ void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// co
 
 }
 
+
 void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
+
 	updateSubmitStatus(runId, OJ_RN, nullptr);/// set Running status
 
 	const char* dataIn = "data.in";		//
 	const char* userOut = "user.out";
 	const char* errOut = "err.out";
 
-	// get time limit and memory limit of this problem from sql
+	// get time limit and memory limit of problem from sql
 	int timeLimit = 1, memLimit = 64;
 	try {
 		sql::Driver* driver = get_driver_instance();
@@ -203,30 +211,30 @@ void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 
 		sql::ResultSet* rs = ps->executeQuery();
 		if (rs->next()) {
-			timeLimit = rs->getInt(3); // ms
-			memLimit = rs->getInt(4);  // MB
+			timeLimit = rs->getInt(3); /// ms
+			memLimit = rs->getInt(4);  /// MB
 		}
 
 		delete rs;
 		delete ps;
 		delete conn;
 	}
-	catch (sql::SQLException& e) {
+	catch (sql::SQLException& e) {//system error
 		saveErrorLog(e);
 		updateSubmitStatus(runId, OJ_SE, 0, 0);
 	}
 
-	if (atoi(lang) == 3) {// java
-		timeLimit <<= 1;
+	if (atoi(lang) == 3) {// in java
+		timeLimit <<= 1; //?????????????????????????????????????????????????????????????????????????????????????????
 		memLimit <<= 1;
 	}
 
-	/* start judge */
+	// start judge
 	try {
-		/* get all input data and output data of this problem */
+		// get all input data and output data of this problem 
 		sql::Driver* driver = get_driver_instance();
 		sql::Connection* conn = driver->connect(hostname, username, passwd);
-		conn->setSchema(dbname);
+		conn->setSchema(dbname);/// collection of database objects
 
 		const char* sql = "call getInputOutputData(?,?)";
 		sql::PreparedStatement* ps = conn->prepareStatement(sql);
@@ -239,21 +247,21 @@ void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 		int topMem = 0;
 
 		initAllowSysCall(atoi(lang));
-		while (rs->next() && OJ_AC == result) {
-			std::string inputData = rs->getString(1);
-			std::string outputData = rs->getString(2);
+		while (rs->next() && OJ_AC == result) {//从数据库中得到测试用数据 ++++++++++++++++++++++++++++++++++++++++++++++++待修改
+			std::string inputData = rs->getString(1);// 输入样例
+			std::string outputData = rs->getString(2);// 输出答案
 
 			saveFile(inputData.c_str(), dataIn);
 
 			int usedTime = 0;
 
 			pid_t pidRun = fork();
-			if (pidRun == 0) {
+			if (pidRun == 0) {// child process
 				// run the submit program
 				run(atoi(lang), timeLimit, memLimit, usedTime, dataIn, userOut, errOut);
 				exit(0);
 			}
-			else if (pidRun != -1) {
+			else if (pidRun != -1) {// parent process
 				// watch the running process, and update the result, max memory and time
 				watchRunningStatus(pidRun, errOut, atoi(lang), result, topMem, usedTime
 					, memLimit, timeLimit, userOut, outputData.length());
@@ -281,5 +289,101 @@ void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 	catch (sql::SQLException& e) {
 		saveErrorLog(e);
 		updateSubmitStatus(runId, OJ_SE, 0, 0);
+	}
+}
+
+
+void saveFile(const char* data, const char* fileName) {// function for save the data in file
+	std::ofstream fout(fileName);
+	fout << data;
+	fout.close();
+}
+
+
+int checkResult(std::string dataOut, const char* userOutFileName) {// check the result
+	// get user output data 
+	std::ifstream fin(userOutFileName);
+	std::string line;
+	std::string userOut = "";/// the output result
+
+	while (getline(fin, line)) {
+		userOut += line + "\n";
+	}
+
+	fin.close();
+
+	// compare
+	int dLen = dataOut.length();
+	int uLen = userOut.length();
+
+	int result = OJ_AC;
+	if (uLen >= (dLen << 1) + OFFSET_OLE) result = OJ_OLE;	// output limit exceeded
+	else if (uLen != dLen || dataOut.compare(userOut) != 0) result = OJ_WA;// userOut != dataOut 
+	///		👆先比对长度以提高效率
+	return result;
+}
+
+
+void saveErrorLog(const sql::SQLException& e) {// error record
+
+	std::ofstream fout(MYSQL_ERROR_LOG, std::ios_base::out | std::ios_base::app);
+
+	fout << "# ERR: SQLException in " << __FILE__;
+	fout << "# ERR: " << e.what();
+	fout << " (MySQL error code: " << e.getErrorCode();
+	fout << ", SQLState: " << e.getSQLState() << " )" << "\n";
+
+	fout.close();
+
+}
+
+
+void run(int lang, int timeLimit, int memLimit, int& usedTime
+	,const char* dataIn, const char* userOut, const char* errOut) {// function for run program
+
+	freopen(dataIn, "r", stdin);
+	freopen(userOut, "w", stdout);
+	freopen(errOut, "w", stderr);
+
+	ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
+
+	// setrlimit
+	struct rlimit lim;
+
+	lim.rlim_cur = lim.rlim_max = timeLimit / 1000.0 + 1;// the unit of timeLimit is ms
+	setrlimit(RLIMIT_CPU, &lim);
+	alarm(0);
+	alarm(timeLimit / 1000.0 + 1);
+
+	lim.rlim_max = (FILE_SIZE << 20) + MB;// the unit of FILE_SIZE is MB
+	lim.rlim_cur = FILE_SIZE << 20;
+	setrlimit(RLIMIT_FSIZE, &lim);
+
+	switch (lang) {
+	case 3: // java
+		lim.rlim_cur = lim.rlim_max = 80; break;
+	default:
+		lim.rlim_cur = lim.rlim_max = 1;
+	}
+	setrlimit(RLIMIT_NPROC, &lim);
+
+	lim.rlim_cur = lim.rlim_max = MB << 6;
+	setrlimit(RLIMIT_STACK, &lim);
+
+	if (lang < 3) {
+		lim.rlim_cur = memLimit * MB / 2 * 3;// the unit of memLimit is MB
+		lim.rlim_max = memLimit * MB;
+		setrlimit(RLIMIT_AS, &lim);
+	}
+
+	switch (lang) {
+	case 1: case 2:// c and c++
+		execl("./Main", "./Main", nullptr); break;
+	case 3:// java
+		char javaXms[32];
+		sprintf(javaXms, "-Xmx%dM", memLimit);
+		execl("/usr/bin/java", "/usr/bin/java", javaXms, "-Djava.security.manager"
+			, "-Djava.security.policy=/usr/lib/jvm/java-8-oracle/jre/lib/security/my.policy", "Main", nullptr);
+		break;
 	}
 }
