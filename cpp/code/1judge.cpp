@@ -1,19 +1,19 @@
 ﻿
 /*************************************************
-     Copyright (c) 2009, 华中科技大学      （版权声明）
+     Copyright (c) 2018 中北大学 North University of China
      All rights reserved.
 
- @file  （judge.cpp）
- @brief （完成判题过程的程序）
+ @file  judge.cpp
+ @brief 完成判题过程的程序
 
-（judge.cpp为完成判题过程，通过传递的参数编译用户的源代码,
-  如果编译出错，则向数据库写入系统错误或编译错误及错误信息;
-  否则，开始判题。判题时，通过链接数据库获取题目限制的时间
-  和内存,并读取所有的输入数据、输出数据。）
+ @note  judge.cpp为完成判题过程，通过传递的参数编译用户的源代码,
+		如果编译出错，则向数据库写入系统错误或编译错误及错误信息;
+		否则，开始判题。判题时，通过链接数据库获取题目限制的时间
+		和内存,并读取所有的输入数据、输出数据。
 
- @version 1.1      （版本声明）
+ @version			0.8        
  @author             （）
- @date                 （2018.7.23）
+ @date				2018.7.23
 
 
      修订说明：
@@ -39,16 +39,17 @@
 #include "cppconn/resultset.h"
 #include "cppconn/prepared_statement.h"
 
+//constant
 #define MB 1048576
-#define COMPILE_TIME 6
-#define COMPILE_MEM 128
+#define COMPILE_TIME 6	// time limit of compile
+#define COMPILE_MEM 128	// memory limit of compile(MB)
 #define FILE_SIZE 10
-
+//tag of Language
 #define LAN_C 1
 #define LAN_CPP 2
 #define LAN_JAVA 3
 #define TOTAL_LAN 3
-
+//status
 #define OJ_AC 1			// Accepted 通过
 #define OJ_WA 2			// Wrong Answer 答案错误 
 #define OJ_TLE 3		// Time Limit Exceeded  超时
@@ -66,6 +67,9 @@
 int compile(int lang, const char* ceFile, const char* runId){// return 0 means compile success
 
 	updateSubmitStatus(runId, OJ_CL, nullptr);/// set compiling
+
+	int time_limit = COMPILE_TIME;/// time limit of compile
+	int memory_limit = COMPILE_MEM*MB;/// memory limit of compile
 }
 
 void updateCompileErrorInfo(const char* runId, const char* ceFile){//write CompileError in ceFile
@@ -80,7 +84,7 @@ void updateCompileErrorInfo(const char* runId, const char* ceFile){//write Compi
 
 	updateSubmitStatus(runId, OJ_CE, ceStr.c_str());
 }
-void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// connect to Mysql and
+void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// connect to Mysql 待修改
 
 	sql::Driver* driver = nullptr;
 	sql::Connection* conn = nullptr;
