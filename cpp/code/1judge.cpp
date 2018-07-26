@@ -63,11 +63,25 @@
 
 #define OFFSET_OLE 1024	//允许误差超出的文件长
 
+//对于可调用系统进程的要求
+// C and C++
+const int ALLOW_SYS_CALL_C[] = { 0,1,2,3,4,5,8,9,11,12,20,21,59,63,89,158,231,240, SYS_time, SYS_read, SYS_uname, SYS_write
+, SYS_open, SYS_close, SYS_execve, SYS_access, SYS_brk, SYS_munmap, SYS_mprotect, SYS_mmap, SYS_fstat
+, SYS_set_thread_area, 252, SYS_arch_prctl, 0 };
+// java
+const int ALLOW_SYS_CALL_JAVA[] = { 0,2,3,4,5,9,10,11,12,13,14,21,56,59,89,97,104,158,202,218,231,273,257,
+61, 22, 6, 33, 8, 13, 16, 111, 110, 39, 79, SYS_fcntl, SYS_getdents64, SYS_getrlimit, SYS_rt_sigprocmask
+, SYS_futex, SYS_read, SYS_mmap, SYS_stat, SYS_open, SYS_close, SYS_execve, SYS_access, SYS_brk, SYS_readlink
+, SYS_munmap, SYS_close, SYS_uname, SYS_clone, SYS_uname, SYS_mprotect, SYS_rt_sigaction, SYS_getrlimit
+, SYS_fstat, SYS_getuid, SYS_getgid, SYS_geteuid, SYS_getegid, SYS_set_thread_area, SYS_set_tid_address
+, SYS_set_robust_list, SYS_exit_group, 158, 0 };
+
 char* hostname = nullptr;
 char* username = nullptr;
 char* passwd = nullptr;
 char* dbname = nullptr;
 
+//错误记录
 const char* MYSQL_ERROR_LOG = "mysqlError.log";
 const char* SYSTEM_ERROR_LOG = "systemError.log";
 
@@ -85,7 +99,7 @@ int compile(int lang, const char* ceFile, const char* runId){// return 0 means c
 	int memory_limit = COMPILE_MEM*MB;/// memory limit of compile
 
 	// compile commands
-	// .需要使用静态编译 否则会增大内存使用量
+	// .需要使用静态编译--static 否则会增大内存使用量
 	const char * COMP_C[] = { "gcc","-Wall","-lm", "--static","Main.c","-o","Main",nullptr };
 	const char * COMP_CPP[] = { "g++","-Wall","-fno-asm","-lm", "--static", "-std=c++11"
 		,"Main.cpp","-o","Main",nullptr };
@@ -115,7 +129,7 @@ int compile(int lang, const char* ceFile, const char* runId){// return 0 means c
 		lim.rlim_cur = lim.rlim_max = time_limit;
 		setrlimit(RLIMIT_CPU, &lim);// set cpu time limit
 
-		alarm(0);//????????????????????????????????????????????????????????????????????????????????????????
+		alarm(0);//重设alarm（）防止之前的干扰
 		alarm(time_limit);
 
 		lim.rlim_cur = memory_limit;
@@ -398,7 +412,7 @@ void run(int lang, int timeLimit, int memLimit, int& usedTime
 	lim.rlim_cur = lim.rlim_max = MB << 6;
 	setrlimit(RLIMIT_STACK, &lim);
 
-	if (lang < 3) {
+	if (lang < 3) {//c and c++
 		lim.rlim_cur = memLimit * MB / 2 * 3;// the unit of memLimit is MB
 		lim.rlim_max = memLimit * MB;
 		setrlimit(RLIMIT_AS, &lim);
@@ -426,13 +440,14 @@ void watchRunningStatus(pid_t pidRun, const char* errFile, int lang, int& result
 	struct rusage usage;
 
 	if (topMem == 0)
-		topMem = getProcStatus(pidRun, "VmRSS:") << 10;
+		topMem = getProcStatus(pidRun, "VmRSS:") << 10; // VmRSS是程序现在使用的物理内存
 
 	wait(&status);// wait execl
-	if (WIFEXITED(status)) return;
+	if (WIFEXITED(status)) return;// WIFEXITED(status)如果子进程正常结束则为非 0 值
 
 	ptrace(PTRACE_SETOPTIONS, pidRun, nullptr
 		, PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXIT | PTRACE_O_EXITKILL);
+
 	ptrace(PTRACE_SYSCALL, pidRun, nullptr, nullptr);
 
 	while (true) {
@@ -440,7 +455,7 @@ void watchRunningStatus(pid_t pidRun, const char* errFile, int lang, int& result
 
 		// update topMem and result
 		if (lang == 3) tmpMem = getPageFaultMem(usage);
-		else tmpMem = getProcStatus(pidRun, "VmPeak:") << 10;	// the unit of function is KB
+		else tmpMem = getProcStatus(pidRun, "VmPeak:") << 10;	// the unit of function is KB .VmPeak代表当前进程运行过程中占用内存的峰值
 
 		if (tmpMem > topMem) topMem = tmpMem;
 		if (topMem > (memLimit << 20)) {
@@ -531,5 +546,75 @@ void watchRunningStatus(pid_t pidRun, const char* errFile, int lang, int& result
 	else {
 		usedTime += (usage.ru_utime.tv_sec * 1000 + usage.ru_utime.tv_usec / 1000);
 		usedTime += (usage.ru_stime.tv_sec * 1000 + usage.ru_stime.tv_usec / 1000);
+	}
+}
+
+
+int getProcStatus(int pid, const char* statusTitle) {// get memory info from /proce/pid/status
+	char file[64];
+	sprintf(file, "/proc/%d/status", pid);
+	std::ifstream fin(file);
+	std::string line;
+
+	int sLen = strlen(statusTitle);
+
+	int status = 0;// the unit of status is KB
+	while (getline(fin, line)) {
+		//		std::cout << line << "\n";
+
+		int lLen = line.length();
+		if (lLen <= sLen) continue;
+
+		// find line
+		bool flag = true;
+		for (int i = 0; i<sLen; ++i) {
+			if (line[i] != statusTitle[i]) {
+				flag = false;
+				break;
+			}
+		}
+
+		if (flag) {
+			// get status
+			for (int i = sLen; i<lLen; ++i) {
+				if (line[i] >= '0' && line[i] <= '9') status = status * 10 + line[i] - '0';
+				else if (status) break;
+			}
+			break;
+		}
+	}
+
+	//	std::cout << "\n";
+
+	return status;
+}
+
+
+int getPageFaultMem(const struct rusage& usage) {// get the memory of java program
+	return usage.ru_minflt * getpagesize();
+}
+
+
+int getFileSize(const char* fileName) {// get the memory of java program
+	struct stat f_stat;
+
+	if (stat(fileName, &f_stat) == -1) return 0;// int stat(const char * file_name, struct stat *buf); 获取文件状态 执行成功则返回0，失败返回-1
+	else return f_stat.st_size; // in bytes 文件大小, 以字节计算
+}
+
+void initAllowSysCall(int lang) {
+	memset(allowSysCall, false, sizeof(allowSysCall));
+
+	switch (lang) {
+	case 1: case 2:
+		for (int i = 0; !i || ALLOW_SYS_CALL_C[i]; ++i) {
+			allowSysCall[ALLOW_SYS_CALL_C[i]] = true;
+		}
+		break;
+	case 3:
+		for (int i = 0; !i || ALLOW_SYS_CALL_JAVA[i]; ++i) {
+			allowSysCall[ALLOW_SYS_CALL_JAVA[i]] = true;
+		}
+		break;
 	}
 }
