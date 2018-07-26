@@ -48,7 +48,7 @@ create table ResultSet
     codeLength varchar(10), #代码长度
     rLanguage varchar(6) not null default 'JAVA' check(language in('C','C++','JAVA')), 
 		#语言，非空，其约束条件：判断类型是否属于('C','C++','JAVA')的其中一种，否则不能写进数据库
-    result varchar(30), #本次提交的提交结果
+    result tinyint not null DEFAULT 9, #本次提交的提交结果
     textCpu varchar(10), #消耗的cpu
     testMemory varchar(10), #消耗的内存
     sourceCode text not null, #本次提交的题目的源代码

@@ -54,7 +54,7 @@
 #define OJ_TLE 3		// Time Limit Exceeded  超时
 #define OJ_MLE 4		// Memory Limit Exceeded 内存超过限制
 #define OJ_RE 5			// Runtime Error 运行时错误
-#define OJ_OLE 6		// Output Limit Exceeded 输出文件超限制
+#define OJ_OLE 6		// Output Limit Exceeded 输出超限制
 #define OJ_CE 7			// Compile Error  编译出错
 #define OJ_SE 8			// System Error 系统错误
 #define OJ_QU 9			// Queue 排队状态
@@ -186,6 +186,34 @@ void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// co
 		saveErrorLog(e);
 	}
 
+}
+
+
+void updateSubmitStatus(const char* runId, int result, int time, int mem) {
+	sql::Driver* driver = nullptr;
+	sql::Connection* conn = nullptr;
+	sql::PreparedStatement* ps = nullptr;
+
+	try {
+		driver = get_driver_instance();
+		conn = driver->connect(hostname, username, passwd);
+		conn->setSchema(dbname);
+
+		const char* sql = "call updateRunningResult(?,?,?,?)";
+		ps = conn->prepareStatement(sql);
+
+		ps->setString(1, runId);
+		ps->setInt(2, result);
+		ps->setInt(3, time);
+		ps->setInt(4, mem);
+		ps->execute();
+
+		delete ps;
+		delete conn;
+	}
+	catch (sql::SQLException& e) {
+		saveErrorLog(e);
+	}
 }
 
 
@@ -345,7 +373,7 @@ void run(int lang, int timeLimit, int memLimit, int& usedTime
 	freopen(userOut, "w", stdout);
 	freopen(errOut, "w", stderr);
 
-	ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
+	ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);// start to  ptrace .PTRACE_TRACEME 指本进程被其父进程所跟踪.其父进程应该希望跟踪子进程
 
 	// setrlimit
 	struct rlimit lim;
@@ -385,5 +413,123 @@ void run(int lang, int timeLimit, int memLimit, int& usedTime
 		execl("/usr/bin/java", "/usr/bin/java", javaXms, "-Djava.security.manager"
 			, "-Djava.security.policy=/usr/lib/jvm/java-8-oracle/jre/lib/security/my.policy", "Main", nullptr);
 		break;
+	}
+}
+
+
+void watchRunningStatus(pid_t pidRun, const char* errFile, int lang, int& result, int& topMem
+	, int& usedTime, int memLimit, int timeLimit, const char* userOut, int outputLen) {// watch the status of run function
+	// the unit of memLimit is MB, the unit of timeLimit is ms
+
+	int tmpMem = 0;
+	int status, sig, exitCode;
+	struct rusage usage;
+
+	if (topMem == 0)
+		topMem = getProcStatus(pidRun, "VmRSS:") << 10;
+
+	wait(&status);// wait execl
+	if (WIFEXITED(status)) return;
+
+	ptrace(PTRACE_SETOPTIONS, pidRun, nullptr
+		, PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXIT | PTRACE_O_EXITKILL);
+	ptrace(PTRACE_SYSCALL, pidRun, nullptr, nullptr);
+
+	while (true) {
+		wait4(pidRun, &status, __WALL, &usage);
+
+		// update topMem and result
+		if (lang == 3) tmpMem = getPageFaultMem(usage);
+		else tmpMem = getProcStatus(pidRun, "VmPeak:") << 10;	// the unit of function is KB
+
+		if (tmpMem > topMem) topMem = tmpMem;
+		if (topMem > (memLimit << 20)) {
+			if (result == OJ_AC) result = OJ_MLE;
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+
+			break;
+		}
+
+		if (WIFEXITED(status)) break;
+		if (getFileSize(errFile) != 0) {
+			//			std::cout << "RE in line " << __LINE__ << "\n";
+
+			if (result == OJ_AC) result = OJ_RE;
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+			break;
+		}
+
+		if (getFileSize(userOut) > outputLen * 2 + OFFSET_OLE) {
+			if (result == OJ_AC) result = OJ_OLE;
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+			break;
+		}
+
+		exitCode = WEXITSTATUS(status);
+		if (!((lang == 3 && exitCode == 17) || exitCode == 0 || exitCode == 133 || exitCode == 5)) {
+			//			std::cout << "error in line " << __LINE__ << ", exitCode is " << exitCode << "\n";
+
+			if (result == OJ_AC) {
+				switch (exitCode) {
+				case SIGCHLD:
+				case SIGALRM:
+					alarm(0);
+				case SIGKILL:
+				case SIGXCPU:
+					result = OJ_TLE;
+					break;
+				case SIGXFSZ:
+					result = OJ_OLE;
+					break;
+				default:
+					result = OJ_RE;
+				}
+			}
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+			break;
+		}
+
+		if (WIFSIGNALED(status)) {
+			sig = WTERMSIG(status);
+
+			//			std::cout << "error in line " << __LINE__ << ", signal is " << sig << "\n";
+
+			if (result == OJ_AC) {
+				switch (sig) {
+				case SIGCHLD:
+				case SIGALRM:
+					alarm(0);
+				case SIGKILL:
+				case SIGXCPU:
+					result = OJ_TLE;
+					break;
+				case SIGXFSZ:
+					result = OJ_OLE;
+					break;
+				default:
+					result = OJ_RE;
+				}
+			}
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+			break;
+		}
+
+		// check invalid system call, x64 is ORIG_RAX*8, x86 is ORIG_EAX*4
+		int sysCall = ptrace(PTRACE_PEEKUSER, pidRun, ORIG_RAX << 3, nullptr);
+		if (!allowSysCall[sysCall]) {
+			//			std::cout << "error in line " << __LINE__ << ", system call id is " << sysCall << "\n";
+
+			result = OJ_RE;
+			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
+			break;
+		}
+
+		ptrace(PTRACE_SYSCALL, pidRun, nullptr, nullptr);
+	}
+
+	if (result == OJ_TLE) usedTime = timeLimit;
+	else {
+		usedTime += (usage.ru_utime.tv_sec * 1000 + usage.ru_utime.tv_usec / 1000);
+		usedTime += (usage.ru_stime.tv_sec * 1000 + usage.ru_stime.tv_usec / 1000);
 	}
 }
