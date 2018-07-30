@@ -93,7 +93,7 @@ create table ContestResultSet
     userId varchar(20), #用户Id
     testId int, #题目Id
     contestId smallint, #考试Id
-    result varchar(30),
+    result tinyint not null DEFAULT 9, #本次提交的提交结果
     cSubmitTime datetime not null DEFAULT CURRENT_TIMESTAMP, #提交时间，自动获取本地时间，非空 
     testCode text not null, #本次提交的题目的源代码
     foreign key(userId) references Users(userId), #从Users表中引入用户Id，设为外键
