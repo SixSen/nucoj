@@ -1,0 +1,19 @@
+.navbar-fixed-top{
+	position: static;
+	
+}
+#projects{
+	width: 90%;
+	float: left;
+	margin-left: 80px;
+	padding: 20px;
+}
+#projects span{
+	float: right;
+	line-height: 18px;
+	font-size: 18px;
+	margin-top: 20px;
+}
+#projects h3{
+	float:left;
+}

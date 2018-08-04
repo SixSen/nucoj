@@ -1,0 +1,83 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Online Judge</title>
+
+<script type="text/javascript" src="../js/jquery-1.9.1.min.js"></script>
+<!-- <script type="text/javascript" src="back-endPage.js"></script> --> <!-- 后台分页 -->
+<script type="text/javascript" src="../js/front-endPage.js"></script><!-- 前台分页 -->
+<script type="text/javascript" src="../js/shujv2.js"></script>
+<link rel= "stylesheet" href = "../css/bootstrap.css">
+<link rel= "stylesheet" href = "../css/bootstrap.min.css">
+<link rel= "stylesheet" href = "../css/bootstrap-theme.css">
+<link rel= "stylesheet" href = "../css/bootstrap-theme.min.css">
+<link rel="stylesheet" type="text/css" href="../css/table.css">
+
+</head>
+<body>
+	
+	<nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid" style="margin-right:30px">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">Online Judge</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" style="margin-left:30px; " href="#">Online Judge</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj.html">首页</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="type.html">问题</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj_tests.html">考试</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj_status.html">状态</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="about.html">关于</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse" style="margin-top:5px">
+            <ul class="nav navbar-nav navbar-right">
+                <a href="login.html">
+                    <button class="btn btn-primary btn-lg" style="font-size:12px; " >登录</button>
+                </a>
+                <a href="sign up.html">
+                    <button class="btn btn-default btn-lg" style="font-size:12px">注册</button>
+                </a>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+	
+	
+<div id="histroyBox"></div>
+<script type="text/javascript">
+    //前台分页的样子
+    $('#histroyBox').CJJTable({
+       'title':["试题编号","试题名称","关键字","更新时间","通过率"],//thead中的标题 必填
+       'body':["testId","testName","keyWord","updateTime","passRate"],
+		//tbody td 取值的字段 必填
+       'display':[1,1,1,1,1],//隐藏域，1显示，2隐藏 必填
+       'pageNUmber':10,//每页显示的条数 选填
+       'pageLength':data.length,//选填
+       'url':data,//数据源 必填
+       dbTrclick:function(e){//双击tr事件
+       window.open('describe.html')
+       }
+    });
+    //后台分页的样子
+    /*$('#histroyBox').CJJTable({
+        'title':["装点","卸点","运输货物","下单日期"],//thead中的标题 必填
+        'body':["contactName","contactMobliePhone","carrierName","taskNum","taskCustomerExpectPrice","taskCustomerBudgetFreight"],//tbody td 取值的字段 必填
+        'display':[1,1,1,1,2,2],//隐藏域，1显示，2隐藏 必填
+        'pageJson':{
+            "taskId":528710,
+            "pageSize":100,//ajax请求参数中的每页展示数量 选填
+            "token":"yJUmunFeG3REqisYAmCfeA"
+        },
+        'url':'api/quoted/quotedList',//数据源 必填
+        dbTrclick:function(that){ //双击tr事件
+            alert(that.find('.contactName').html())
+        }
+    });*/
+</script>
+</body>
+</html>
