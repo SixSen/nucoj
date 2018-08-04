@@ -54,7 +54,7 @@
 #define OJ_TLE 3		// Time Limit Exceeded  超时
 #define OJ_MLE 4		// Memory Limit Exceeded 内存超过限制
 #define OJ_RE 5			// Runtime Error 运行时错误
-#define OJ_OLE 6		// Output Limit Exceeded 输出超限制
+#define OJ_OLE 6		// Output Limit Exceeded 输出文件超限制
 #define OJ_CE 7			// Compile Error  编译出错
 #define OJ_SE 8			// System Error 系统错误
 #define OJ_QU 9			// Queue 排队状态
@@ -63,43 +63,54 @@
 
 #define OFFSET_OLE 1024	//允许误差超出的文件长
 
-//对于可调用系统进程的要求
-// C and C++
-const int ALLOW_SYS_CALL_C[] = { 0,1,2,3,4,5,8,9,11,12,20,21,59,63,89,158,231,240, SYS_time, SYS_read, SYS_uname, SYS_write
-, SYS_open, SYS_close, SYS_execve, SYS_access, SYS_brk, SYS_munmap, SYS_mprotect, SYS_mmap, SYS_fstat
-, SYS_set_thread_area, 252, SYS_arch_prctl, 0 };
-// java
-const int ALLOW_SYS_CALL_JAVA[] = { 0,2,3,4,5,9,10,11,12,13,14,21,56,59,89,97,104,158,202,218,231,273,257,
-61, 22, 6, 33, 8, 13, 16, 111, 110, 39, 79, SYS_fcntl, SYS_getdents64, SYS_getrlimit, SYS_rt_sigprocmask
-, SYS_futex, SYS_read, SYS_mmap, SYS_stat, SYS_open, SYS_close, SYS_execve, SYS_access, SYS_brk, SYS_readlink
-, SYS_munmap, SYS_close, SYS_uname, SYS_clone, SYS_uname, SYS_mprotect, SYS_rt_sigaction, SYS_getrlimit
-, SYS_fstat, SYS_getuid, SYS_getgid, SYS_geteuid, SYS_getegid, SYS_set_thread_area, SYS_set_tid_address
-, SYS_set_robust_list, SYS_exit_group, 158, 0 };
-
 char* hostname = nullptr;
 char* username = nullptr;
 char* passwd = nullptr;
 char* dbname = nullptr;
 
-//错误记录
 const char* MYSQL_ERROR_LOG = "mysqlError.log";
 const char* SYSTEM_ERROR_LOG = "systemError.log";
 
 int main(int argc, char *argv[]) {
-	// argv is command, runId, cid, pno, language, hostname username passwd dbname
+	//             1      2     3    4      5         6         7      8
+	// argvs are runId, cid, pno, language, hostname username passwd dbname
+	if (argc != 8 + 1) {
+		printf("argv num error:%d\n", argc);
+		return 1;
+	}
+
+	//	freopen("debug.dat", "w", stdout);
+
+	hostname = argv[5];
+	username = argv[6];
+	passwd = argv[7];
+	dbname = argv[8];
+
+	const char* ceFile = "ce.dat";
+	int status = compile(atoi(argv[4]), ceFile, argv[1]);
+
+	if (status == -1) {// system error
+		updateSubmitStatus(argv[1], -1, 0, 0);
+	}
+	else if (status != 0) {// compile error
+		updateCompileErrorInfo(argv[1], ceFile);
+	}
+	else {// compile success
+		judge(argv[1], argv[2], argv[3], argv[4]);
+	}
 
 	return 0;
 }
 
 int compile(int lang, const char* ceFile, const char* runId){// return 0 means compile success
 
-	updateSubmitStatus(runId, OJ_CL, nullptr);/// set compiling
+	updateSubmitStatus(runId, OJ_CL, nullptr);// set compiling
 
-	int time_limit = COMPILE_TIME;/// time limit of compile
-	int memory_limit = COMPILE_MEM*MB;/// memory limit of compile
+	int time_limit = COMPILE_TIME;// time limit of compile
+	int memory_limit = COMPILE_MEM*MB;// memory limit of compile
 
 	// compile commands
-	// .需要使用静态编译--static 否则会增大内存使用量
+	// .需要使用静态编译 否则会增大内存使用量
 	const char * COMP_C[] = { "gcc","-Wall","-lm", "--static","Main.c","-o","Main",nullptr };
 	const char * COMP_CPP[] = { "g++","-Wall","-fno-asm","-lm", "--static", "-std=c++11"
 		,"Main.cpp","-o","Main",nullptr };
@@ -129,8 +140,8 @@ int compile(int lang, const char* ceFile, const char* runId){// return 0 means c
 		lim.rlim_cur = lim.rlim_max = time_limit;
 		setrlimit(RLIMIT_CPU, &lim);// set cpu time limit
 
-		alarm(0);//重设alarm（）防止之前的干扰
-		alarm(time_limit);
+		alarm(0);//取消之前设置的定时器闹钟，并将剩下的时间返回
+		alarm(time_limit); //经过time_limit后，子进程终止
 
 		lim.rlim_cur = memory_limit;
 		setrlimit(RLIMIT_AS, &lim);// set memory limit
@@ -203,34 +214,6 @@ void updateSubmitStatus(const char* runId, int result, const char* ceInfo){// co
 }
 
 
-void updateSubmitStatus(const char* runId, int result, int time, int mem) {
-	sql::Driver* driver = nullptr;
-	sql::Connection* conn = nullptr;
-	sql::PreparedStatement* ps = nullptr;
-
-	try {
-		driver = get_driver_instance();
-		conn = driver->connect(hostname, username, passwd);
-		conn->setSchema(dbname);
-
-		const char* sql = "call updateRunningResult(?,?,?,?)";
-		ps = conn->prepareStatement(sql);
-
-		ps->setString(1, runId);
-		ps->setInt(2, result);
-		ps->setInt(3, time);
-		ps->setInt(4, mem);
-		ps->execute();
-
-		delete ps;
-		delete conn;
-	}
-	catch (sql::SQLException& e) {
-		saveErrorLog(e);
-	}
-}
-
-
 void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 
 	updateSubmitStatus(runId, OJ_RN, nullptr);/// set Running status
@@ -267,7 +250,7 @@ void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 	}
 
 	if (atoi(lang) == 3) {// in java
-		timeLimit <<= 1; //?????????????????????????????????????????????????????????????????????????????????????????
+		timeLimit <<= 1; //对于java语言，时间和内存的限制为其他语言的两倍
 		memLimit <<= 1;
 	}
 
@@ -288,7 +271,7 @@ void judge(char* runId, char* cid, char* pno, char* lang) {//judge main
 		int maxTime = 0;
 		int topMem = 0;
 
-		initAllowSysCall(atoi(lang));
+		initAllowSysCall(atoi(lang)); //？？？？？？？？？？？？？？？？？？？？？？？？？？？？？
 		while (rs->next() && OJ_AC == result) {//从数据库中得到测试用数据 ++++++++++++++++++++++++++++++++++++++++++++++++待修改
 			std::string inputData = rs->getString(1);// 输入样例
 			std::string outputData = rs->getString(2);// 输出答案
@@ -381,13 +364,13 @@ void saveErrorLog(const sql::SQLException& e) {// error record
 
 
 void run(int lang, int timeLimit, int memLimit, int& usedTime
-	,const char* dataIn, const char* userOut, const char* errOut) {// function for run program
+	,const char* dataIn, const char* userOut, const char* errOut) {// function for runing the code
 
 	freopen(dataIn, "r", stdin);
 	freopen(userOut, "w", stdout);
 	freopen(errOut, "w", stderr);
 
-	ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);// start to  ptrace .PTRACE_TRACEME 指本进程被其父进程所跟踪.其父进程应该希望跟踪子进程
+	ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
 
 	// setrlimit
 	struct rlimit lim;
@@ -412,7 +395,7 @@ void run(int lang, int timeLimit, int memLimit, int& usedTime
 	lim.rlim_cur = lim.rlim_max = MB << 6;
 	setrlimit(RLIMIT_STACK, &lim);
 
-	if (lang < 3) {//c and c++
+	if (lang < 3) {
 		lim.rlim_cur = memLimit * MB / 2 * 3;// the unit of memLimit is MB
 		lim.rlim_max = memLimit * MB;
 		setrlimit(RLIMIT_AS, &lim);
@@ -426,195 +409,6 @@ void run(int lang, int timeLimit, int memLimit, int& usedTime
 		sprintf(javaXms, "-Xmx%dM", memLimit);
 		execl("/usr/bin/java", "/usr/bin/java", javaXms, "-Djava.security.manager"
 			, "-Djava.security.policy=/usr/lib/jvm/java-8-oracle/jre/lib/security/my.policy", "Main", nullptr);
-		break;
-	}
-}
-
-
-void watchRunningStatus(pid_t pidRun, const char* errFile, int lang, int& result, int& topMem
-	, int& usedTime, int memLimit, int timeLimit, const char* userOut, int outputLen) {// watch the status of run function
-	// the unit of memLimit is MB, the unit of timeLimit is ms
-
-	int tmpMem = 0;
-	int status, sig, exitCode;
-	struct rusage usage;
-
-	if (topMem == 0)
-		topMem = getProcStatus(pidRun, "VmRSS:") << 10; // VmRSS是程序现在使用的物理内存
-
-	wait(&status);// wait execl
-	if (WIFEXITED(status)) return;// WIFEXITED(status)如果子进程正常结束则为非 0 值
-
-	ptrace(PTRACE_SETOPTIONS, pidRun, nullptr
-		, PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXIT | PTRACE_O_EXITKILL);
-
-	ptrace(PTRACE_SYSCALL, pidRun, nullptr, nullptr);
-
-	while (true) {
-		wait4(pidRun, &status, __WALL, &usage);
-
-		// update topMem and result
-		if (lang == 3) tmpMem = getPageFaultMem(usage);
-		else tmpMem = getProcStatus(pidRun, "VmPeak:") << 10;	// the unit of function is KB .VmPeak代表当前进程运行过程中占用内存的峰值
-
-		if (tmpMem > topMem) topMem = tmpMem;
-		if (topMem > (memLimit << 20)) {
-			if (result == OJ_AC) result = OJ_MLE;
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-
-			break;
-		}
-
-		if (WIFEXITED(status)) break;
-		if (getFileSize(errFile) != 0) {
-			//			std::cout << "RE in line " << __LINE__ << "\n";
-
-			if (result == OJ_AC) result = OJ_RE;
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-			break;
-		}
-
-		if (getFileSize(userOut) > outputLen * 2 + OFFSET_OLE) {
-			if (result == OJ_AC) result = OJ_OLE;
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-			break;
-		}
-
-		exitCode = WEXITSTATUS(status);
-		if (!((lang == 3 && exitCode == 17) || exitCode == 0 || exitCode == 133 || exitCode == 5)) {
-			//			std::cout << "error in line " << __LINE__ << ", exitCode is " << exitCode << "\n";
-
-			if (result == OJ_AC) {
-				switch (exitCode) {
-				case SIGCHLD:
-				case SIGALRM:
-					alarm(0);
-				case SIGKILL:
-				case SIGXCPU:
-					result = OJ_TLE;
-					break;
-				case SIGXFSZ:
-					result = OJ_OLE;
-					break;
-				default:
-					result = OJ_RE;
-				}
-			}
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-			break;
-		}
-
-		if (WIFSIGNALED(status)) {
-			sig = WTERMSIG(status);
-
-			//			std::cout << "error in line " << __LINE__ << ", signal is " << sig << "\n";
-
-			if (result == OJ_AC) {
-				switch (sig) {
-				case SIGCHLD:
-				case SIGALRM:
-					alarm(0);
-				case SIGKILL:
-				case SIGXCPU:
-					result = OJ_TLE;
-					break;
-				case SIGXFSZ:
-					result = OJ_OLE;
-					break;
-				default:
-					result = OJ_RE;
-				}
-			}
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-			break;
-		}
-
-		// check invalid system call, x64 is ORIG_RAX*8, x86 is ORIG_EAX*4
-		int sysCall = ptrace(PTRACE_PEEKUSER, pidRun, ORIG_RAX << 3, nullptr);
-		if (!allowSysCall[sysCall]) {
-			//			std::cout << "error in line " << __LINE__ << ", system call id is " << sysCall << "\n";
-
-			result = OJ_RE;
-			ptrace(PTRACE_KILL, pidRun, nullptr, nullptr);
-			break;
-		}
-
-		ptrace(PTRACE_SYSCALL, pidRun, nullptr, nullptr);
-	}
-
-	if (result == OJ_TLE) usedTime = timeLimit;
-	else {
-		usedTime += (usage.ru_utime.tv_sec * 1000 + usage.ru_utime.tv_usec / 1000);
-		usedTime += (usage.ru_stime.tv_sec * 1000 + usage.ru_stime.tv_usec / 1000);
-	}
-}
-
-
-int getProcStatus(int pid, const char* statusTitle) {// get memory info from /proce/pid/status
-	char file[64];
-	sprintf(file, "/proc/%d/status", pid);
-	std::ifstream fin(file);
-	std::string line;
-
-	int sLen = strlen(statusTitle);
-
-	int status = 0;// the unit of status is KB
-	while (getline(fin, line)) {
-		//		std::cout << line << "\n";
-
-		int lLen = line.length();
-		if (lLen <= sLen) continue;
-
-		// find line
-		bool flag = true;
-		for (int i = 0; i<sLen; ++i) {
-			if (line[i] != statusTitle[i]) {
-				flag = false;
-				break;
-			}
-		}
-
-		if (flag) {
-			// get status
-			for (int i = sLen; i<lLen; ++i) {
-				if (line[i] >= '0' && line[i] <= '9') status = status * 10 + line[i] - '0';
-				else if (status) break;
-			}
-			break;
-		}
-	}
-
-	//	std::cout << "\n";
-
-	return status;
-}
-
-
-int getPageFaultMem(const struct rusage& usage) {// get the memory of java program
-	return usage.ru_minflt * getpagesize();
-}
-
-
-int getFileSize(const char* fileName) {// get the memory of java program
-	struct stat f_stat;
-
-	if (stat(fileName, &f_stat) == -1) return 0;// int stat(const char * file_name, struct stat *buf); 获取文件状态 执行成功则返回0，失败返回-1
-	else return f_stat.st_size; // in bytes 文件大小, 以字节计算
-}
-
-void initAllowSysCall(int lang) {
-	memset(allowSysCall, false, sizeof(allowSysCall));
-
-	switch (lang) {
-	case 1: case 2:
-		for (int i = 0; !i || ALLOW_SYS_CALL_C[i]; ++i) {
-			allowSysCall[ALLOW_SYS_CALL_C[i]] = true;
-		}
-		break;
-	case 3:
-		for (int i = 0; !i || ALLOW_SYS_CALL_JAVA[i]; ++i) {
-			allowSysCall[ALLOW_SYS_CALL_JAVA[i]] = true;
-		}
 		break;
 	}
 }

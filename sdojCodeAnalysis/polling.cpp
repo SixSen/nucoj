@@ -39,7 +39,7 @@ static const char* CODE_FILE[] = {"", "Main.c", "Main.cpp", "Main.java"};
 int main(int argc, char* argv[]){
 	freopen("polling.dat","a+",stdout);
 
-	// argv[] is command hostname username passwd dbname judge_shell workdir
+	// argv[] are hostname, username, passwd, dbname, judge_shell, workdir
 	if (argc != 6+1) {
 		std::cout << "argv num eror: " << argc << "\n";
 		return 1;
@@ -91,6 +91,9 @@ int main(int argc, char* argv[]){
 				pid_t pid = fork();
 				if (0==pid) {// child
 					// use judge_shell to judge this submission
+					//     1          2            3        4         5         6
+					//${hostname} ${username} ${passwd} ${dbname} ${judge} ${workdir} 
+					//execl path    $0      $1 ... null
 					execl(argv[5],argv[5],argv[6],(char*)s.runId.c_str(),(char*)s.cid.c_str()
 						,(char*)s.pno.c_str(),(char*)s.lang.c_str()
 						,argv[1],argv[2],argv[3],argv[4],nullptr);
@@ -118,14 +121,15 @@ int main(int argc, char* argv[]){
 
 bool writeCodeIntoFile(const char* workdir, int lang, const char* code){
 	if (lang<1 || lang>=(int)(sizeof(CODE_FILE)/sizeof(CODE_FILE[0]))) {
+		//sizeof(CODE_FILE[i]) == 8; sizeof(CODE_FILE) == 32
 		std::cout << "Code language error!\n";
 		return false;
 	}
 
 	char wd[1024];
-	sprintf(wd,"%s/%s",workdir,CODE_FILE[lang]);
+	sprintf(wd,"%s/%s",workdir,CODE_FILE[lang]); //将目录和文件名写入wd
 
-	std::ofstream fout(wd);
+	std::ofstream fout(wd);//将输出定向为wd指向的文件
 	fout << code;
 	fout.close();
 
