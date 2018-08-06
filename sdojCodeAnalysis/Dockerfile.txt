@@ -1,0 +1,10 @@
+#nucoj Dockerfile
+ 
+FROM ubuntu:16.04
+MAINTAINER North University of China A&C Lab "zhangximeng1212@foxmail.com"
+RUN apt-get update
+RUN apt-get install
+RUN apt-get install 
+EXPOSE 3306
+ENTEYPOINT 
+CMD 
