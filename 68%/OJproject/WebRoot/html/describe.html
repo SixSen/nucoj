@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel= "stylesheet" href = "../css/bootstrap.css">
+<link rel= "stylesheet" href = "../css/bootstrap.min.css">
+<link rel= "stylesheet" href = "../css/bootstrap-theme.css">
+<link rel= "stylesheet" href = "../css/bootstrap-theme.min.css">
+<link rel= "stylesheet" href = "../css/test.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.6/ace.js" type="text/javascript" charset="utf-8"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.6/ext-language_tools.js" type="text/javascript" charset="utf-8"></script>
+
+<title>Online Judge</title>
+</head>
+
+<body>
+	<nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid" style="margin-right:30px">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">Online Judge</span>
+            </button>
+             <a class="navbar-brand" style="margin-left:30px; " href="#">Online Judge</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj.html">首页</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="type.html">问题</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj_tests.html">考试</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="oj_status.html">状态</a>
+					<a class="navbar-brand" style="margin-left:30px; " href="about.html">关于</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse" style="margin-top:5px">
+            <ul class="nav navbar-nav navbar-right">
+                <a href="../login.html">
+                    <button class="btn btn-primary btn-lg" style="font-size:12px; " >登录</button>
+                </a>
+                <a href="../sign up.html">
+                    <button class="btn btn-default btn-lg" style="font-size:12px">注册</button>
+                </a>
+            </ul>
+        </div>
+    </div>
+</nav>
+	<div class = "container" id="middle">
+		<div class = "row">
+			<div class ="col-md-12" >
+				<h1 class= "text-left">题目描述</h1>
+				<div class="well" style ="height:150px">		
+				<p class = "text-left">这里是题目描述</p>
+				</div>
+			</div>
+		</div>
+		
+		<div class = "row">
+			<div class = "col-md-12">
+				<h1 class= "text-left">题目输入</h1>
+				<div class="well" style ="height:100px">
+				<p class = "text-left">输入</p>		
+				</div>
+			</div>
+		</div>
+		
+		<div class = "row">
+			<div class = "col-md-12">
+				<h1 class= "text-left">题目输出</h1>
+				<div class="col-md-12 well" style ="height:100px">	
+				<p class = "text-left">输出</p>	
+				</div>
+			</div>
+		</div>
+		
+		<div class = "row">
+			<div class = "col-md-12">
+				<h1 class= "text-left">样例输入</h1>
+				<div class="col-md-12 well" style ="height:100px">	
+				<p class = "text-left">样例</p>	
+				</div>
+			</div>
+		</div>
+		
+		<div class = "row">
+			<div class = "col-md-12">
+				<h1 class= "text-left">样例输出</h1>
+				<div class="col-md-12 well" style ="height:100px">	
+				<p class = "text-left">样例</p>	
+				</div>
+			</div>
+		</div>
+		
+		<div class = "row">
+			<form class="form-inline" role="form" >
+				<div class="col-md-12">
+					<h1 class= "text-left">代码提交</h1>
+				  	<select class="form-control form-control-plus form-group" onchange="choiceLang(this)" style = "width:150px;">
+						<option value="ace/mode/c_cpp" selected="selected">语言</option>
+						<option value="ace/mode/c_cpp">C/C++</option>  
+						<option value="ace/mode/java">JAVA</option>
+					</select>
+					<select class="form-control form-control-plus form-group" onchange="choiceBack(this)" style = "width:150px;">
+						<option value="ace/theme/xcode" selected="selected">环境配色</option>
+						<option value="ace/theme/xcode">高亮</option>
+						<option value="ace/theme/monokai">暗色</option>
+					</select>
+					<select class="form-control form-control-plus form-group" onchange="choiceSJ(this)" style = "width:150px;">
+						<option value="4" selected="selected">代码缩进</option>
+						<option>2</option>
+						<option>4</option>
+						<option>8</option>
+					</select>
+					<div class="flex-btn form-group" onclick="expand('spanid')">
+						<span class="glyphicon glyphicon-resize-full" id="spanid"></span>
+					</div>
+				</div>
+			</form>
+		</div>
+		<br/>
+		
+		<div class = "row" >		  
+			<pre id="code" class="ace_editor" style="min-height:400px"><textarea class="ace_text-input"></textarea></pre>
+		</div>
+		<br/>
+		
+		<div class = "row" id="buttom">
+			<div class="col-md-12">
+				<button type="button" class="btn btn-warning" style="background:#337ab7;border: #337ab7" >提交</button>
+			</div>
+		</div>
+	</div>
+	
+	<script>
+		//初始化对象
+		editor = ace.edit("code");//该值为编辑框的id值
+		window.onload = (function () {
+			editor.setTheme("ace/theme/xcode"); //设置背景色为高亮
+			editor.session.setMode("ace/mode/c_cpp");  //设置默认语言为c/c++
+			editor.getSession().setTabSize(4);  //设置默认缩进大小
+		})();
+
+		//设置语言
+		function choiceLang(select){
+			editor.session.setMode(select.value);
+		}
+		//设置背景色
+		function choiceBack(select){
+			editor.setTheme(select.value); 
+		}
+		//设置缩进大小
+		function choiceSJ(select){
+			editor.getSession().setTabSize(select.value);
+		}
+
+		function submit(){
+			var code  = editor.getValue();
+		}
+
+		//字体大小
+		editor.setFontSize(18);
+
+		//设置只读（true时只读，用于展示代码）
+		editor.setReadOnly(false); 
+
+		//自动换行,设置为off关闭
+		 editor.setOption("wrap", "free")
+
+		//启用提示菜单
+		ace.require("ace/ext/language_tools");
+		editor.setOptions({
+			enableBasicAutocompletion: true,
+			enableSnippets: true,
+			enableLiveAutocompletion: true
+		});
+	</script>
+</body>
+</html>
+
+
